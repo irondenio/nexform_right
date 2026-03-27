@@ -789,60 +789,75 @@
   </footer>
 
   <script>
-    /* ── NAV scroll ── */
-    const nav = document.getElementById('nav');
-    window.addEventListener('scroll', () => {
-      nav.classList.toggle('scrolled', window.scrollY > 40);
-    }, { passive: true });
+  /* ── NAV scroll ── */
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 40);
+  }, { passive: true });
 
-    /* ── Reveal on scroll ── */
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
-    }, { threshold: 0.12 });
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  /* ── Reveal on scroll ── */
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12 });
 
-    /* ── Form submission ── */
-    const form = document.getElementById('lead-form');
-    const successMsg = document.getElementById('success-msg');
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
+  /* ── FORM SUBMISSION → N8N ── */
+  const form = document.getElementById('lead-form');
+  const successMsg = document.getElementById('success-msg');
 
-      // Basic validation
-      const required = form.querySelectorAll('[required]');
-      let valid = true;
-      required.forEach(field => {
-        field.style.borderColor = '';
-        if (!field.value.trim()) {
-          field.style.borderColor = '#c0392b';
-          valid = false;
-        }
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Validation
+    const required = form.querySelectorAll('[required]');
+    let valid = true;
+
+    required.forEach(field => {
+      field.style.borderColor = '';
+      if (!field.value.trim()) {
+        field.style.borderColor = '#c0392b';
+        valid = false;
+      }
+    });
+
+    if (!valid) return;
+
+    // Payload envoyé à n8n
+    const payload = {
+      prenom: document.getElementById('prenom').value.trim(),
+      nom: document.getElementById('nom').value.trim(),
+      email: document.getElementById('email').value.trim(),
+      entreprise: document.getElementById('entreprise').value.trim(),
+      message: document.getElementById('besoin').value.trim(), // 🔥 corrigé ici
+      source: "landing_nexform",
+      date: new Date().toISOString()
+    };
+
+    try {
+      await fetch("https://denio.app.n8n.cloud/webhook-test/nexform", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
       });
 
-      if (!valid) {
-        form.querySelector('[required]:not([value]),[required][style]')?.focus();
-        return;
-      }
-
-      // Collect data
-      const payload = {
-        prenom:     document.getElementById('prenom').value.trim(),
-        nom:        document.getElementById('nom').value.trim(),
-        email:      document.getElementById('email').value.trim(),
-        entreprise: document.getElementById('entreprise').value.trim(),
-        besoin:     document.getElementById('besoin').value.trim(),
-        timestamp:  new Date().toISOString(),
-        source:     'landing_nexform',
-      };
-
-      console.log('Lead capturé :', payload);
-      // → En production : fetch('/api/leads', { method:'POST', body: JSON.stringify(payload), headers:{'Content-Type':'application/json'} })
-
-      // Show success
+      // Success UI
       form.style.display = 'none';
       successMsg.classList.add('visible');
       successMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
-  </script>
+
+    } catch (error) {
+      console.error("Erreur envoi :", error);
+      alert("Une erreur est survenue. Merci de réessayer.");
+    }
+  });
+</script>
 </body>
 </html>

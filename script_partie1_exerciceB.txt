@@ -1,0 +1,191 @@
+{
+  "name": "Nexform Lead Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "nexform",
+        "httpMethod": "POST",
+        "responseMode": "onReceived"
+      },
+      "id": "Webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const email = $json.email;\nconst isValid = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\nreturn [{ ...$json, email_valid: isValid }];"
+      },
+      "id": "ValidateEmail",
+      "name": "Validate Email",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.email_valid}}",
+              "operation": "isTrue"
+            }
+          ]
+        }
+      },
+      "id": "CheckEmail",
+      "name": "Email Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "operation": "chat",
+        "model": "gpt-4o-mini",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Tu es un assistant commercial B2B."
+          },
+          {
+            "role": "user",
+            "content": "Analyse ce message et retourne uniquement un JSON avec : besoin_principal, priorite (Chaud/Tiède/Froid), justification, categorie (Demande de devis/Question technique/Partenariat/Autre), reponse.\n\nMessage: {{$json.message}}"
+          }
+        ]
+      },
+      "id": "OpenAI",
+      "name": "Analyse IA",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [800, 200],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "OpenAI Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fields": {
+          "string": [
+            {
+              "name": "nom",
+              "value": "={{$json.nom}}"
+            },
+            {
+              "name": "email",
+              "value": "={{$json.email}}"
+            },
+            {
+              "name": "message",
+              "value": "={{$json.message}}"
+            },
+            {
+              "name": "resultat_ia",
+              "value": "={{$json.choices[0].message.content}}"
+            }
+          ]
+        }
+      },
+      "id": "FormatData",
+      "name": "Format Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": "YOUR_SHEET_ID",
+        "range": "Sheet1!A:D"
+      },
+      "id": "GoogleSheets",
+      "name": "Save to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [1200, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_CREDS",
+          "name": "Google Sheets Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.resultat_ia}}",
+              "operation": "contains",
+              "value2": "Chaud"
+            }
+          ]
+        }
+      },
+      "id": "PriorityCheck",
+      "name": "Is Hot Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1400, 200]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your@email.com",
+        "toEmail": "sales@company.com",
+        "subject": "🔥 Lead CHAUD",
+        "text": "={{$json.resultat_ia}}"
+      },
+      "id": "SendAlert",
+      "name": "Notify Sales",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1600, 100]
+    },
+    {
+      "parameters": {
+        "fromEmail": "your@email.com",
+        "toEmail": "={{$json.email}}",
+        "subject": "Confirmation de votre demande",
+        "text": "Bonjour {{$json.nom}},\n\nMerci pour votre message. Nous revenons vers vous rapidement.\n\nCordialement"
+      },
+      "id": "SendCustomerEmail",
+      "name": "Email Prospect",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1600, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Validate Email", "type": "main", "index": 0 }]]
+    },
+    "Validate Email": {
+      "main": [[{ "node": "Email Valid?", "type": "main", "index": 0 }]]
+    },
+    "Email Valid?": {
+      "main": [
+        [{ "node": "Analyse IA", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Analyse IA": {
+      "main": [[{ "node": "Format Data", "type": "main", "index": 0 }]]
+    },
+    "Format Data": {
+      "main": [[{ "node": "Save to Sheets", "type": "main", "index": 0 }]]
+    },
+    "Save to Sheets": {
+      "main": [[{ "node": "Is Hot Lead?", "type": "main", "index": 0 }]]
+    },
+    "Is Hot Lead?": {
+      "main": [
+        [{ "node": "Notify Sales", "type": "main", "index": 0 }],
+        [{ "node": "Email Prospect", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}
